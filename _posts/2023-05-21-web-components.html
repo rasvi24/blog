@@ -1,0 +1,231 @@
+---
+layout: post
+title:  "A Web Component Intro with Example"
+date:   2023-05-21 02:12:00 +0530
+categories: javascript
+permalink: 2023-05-21-webcomponent-intro-with-example
+---
+<p>I will demonstrate writing a web component by implementing tabbed panels. The finished tabs will look like below.</p>
+<img src="/assets/images/wc/tab-code-prev.png" />
+<p>Web Component is a standard built into the browser. At the time of writing every major browser supports this feature. It is an underrated feature and often shadowed by popular SPA frameworks like React and Angular. I say this feature is underrated because WC (Web Component) predates React and it does not require importing any external libraries. Enough of history lets see how to write a component.</p>
+<p>A WC needs two steps.</p>
+<ol>
+  <li>A class that extends HTMLElement.</li>
+  <li>Registering the component as a custom element.</li>
+</ol>
+<pre>
+&#x3C;!DOCTYPE html&#x3E;
+&#x3C;html&#x3E;
+&#x3C;head&#x3E;
+  &#x3C;script&#x3E;
+    class WCTab extends HTMLElement { } //Step 1
+    customElements.define(&#x22;wc-tab&#x22;, WCTab) //Step 2
+  &#x3C;/script&#x3E;
+&#x3C;/head&#x3E;
+&#x3C;/html&#x3E;
+</pre>
+<p>That't it. A Web Component is ready to use. In registering the WC, the name must always contain a hyphen that is the reason it is <span><code>wc-tab</code></span> instead of <span><code>wctab</code></span>. This name is what needed to use this WC. We can use it just be creating a tag with same name as below.</p>
+<pre>
+&#x3C;body&#x3E;
+  &#x3C;wc-tab&#x3E;&#x3C;/wc-tab&#x3E;
+&#x3C;/body&#x3E;
+</pre>
+<p>Opening the html in browser doesn't show anything. It is not any better than an empty div at this point. Lets write something in between the opening and close tag.</p>
+<pre>
+&#x3C;wc-tab&#x3E;
+  &#x3C;p&#x3E;Hello world!&#x3C;/p&#x3E;
+&#x3C;/wc-tab&#x3E;
+</pre>
+<p>This actually prints Hello world! in the browser!</p>
+<h3>Shadow Root</h3>
+<p>You almost always should enable shadow root in your WC. Shadow root provides scoped DOM tree with the web component as its root element. This enables us to import css styles without polluting the global scope. That means we can use css stylesheets and those styles will apply only within this custom element. Any tag with matching css selectors outside the custom component are unaffected. This can be enabled in our constructor as below.</p>
+<pre>
+class WCTab extends HTMLElement {
+  constructor() {
+    super();
+    this.shadow = this.attachShadow({ mode: &#x22;open&#x22; });
+  }
+}
+</pre>
+<p>As soon as this change is made, the hello world printed in the browser has disappeared. When shadow DOM is attached, it replaces our existing children. WC has few lifecycle callbacks, one of them is <code>connectedCallback</code>. It is called as soon as the WC is attached to dom. Lets add it!</p>
+<pre>
+class WCTab extends HTMLElement {
+  constructor() {
+      super();
+      this.shadow = this.attachShadow({ mode: &#x22;open&#x22; });
+  }
+  connectedCallback(){
+    console.log(&#x22;connected!&#x22;);
+  }
+}
+</pre>
+<p>This prints <code>connected!</code> in console when the page is refreshed.</p>
+<h3>Tab - Example</h3>
+<p>Lets define how our tab component is going to be designed. Our WC will have each tab as div. The WC should define tab and its content as shown below.</p>
+<pre>
+&#x3C;wc-tab&#x3E;
+  &#x3C;div name=&#x22;Tab 1&#x22;&#x3E;Tab 1 content&#x3C;/div&#x3E;
+  &#x3C;div name=&#x22;Tab 2&#x22;&#x3E;Tab 2 content&#x3C;/div&#x3E;
+  &#x3C;div name=&#x22;Tab 3&#x22;&#x3E;Tab 3 content&#x3C;/div&#x3E;
+&#x3C;/wc-tab&#x3E;
+</pre>
+<p>We are going to read the provided children as input and generate a UI to show them as tabs. it is possible to make each tab as its own custom element instead of div tag. We will stick with div for this example. Let's see how to access the children in our component. We are going to do this in our lifecycle method <code>connectedCallback</code></p>
+<pre>
+connectedCallback(){
+  let tabs = this.querySelectorAll(&#x22;div&#x22;);
+  console.log(tabs);
+}
+</pre>
+<p>This is how we read the children. Unfortunately this does not work. <code>connectedCallback</code> is called before the children are attached to DOM. There is no simple way to read them as soon as they are attached. We go with <code>MutationObserver</code>. This observes changes for children and calls the given callback.</p>
+<pre>
+connectedCallback() {
+  let thisNode = this;
+  let observer = new MutationObserver(function () {
+    let tabs = thisNode.querySelectorAll(&#x22;div&#x22;);
+    console.log(tabs);
+  });
+  
+  // We are only interested in the children of
+  // this component
+  observer.observe(this, { childList: true });
+}
+</pre>
+
+<p>Now this prints <code>NodeList(3) [div, div, div]</code>. Those three divs are the three tabs we need to work. lets add a render method to generate the UI.</p>
+<pre>
+connectedCallback() {
+  let thisNode = this;
+  let observer = new MutationObserver(function () {
+    thisNode.render();
+  });
+
+  // We are only interested in the children of
+  // this component
+  observer.observe(this, { childList: true });
+}
+render() {
+  let tabs = this.querySelectorAll(&#x22;div&#x22;);
+  // Generate UI
+}
+</pre>
+
+<p>Now we separated the render logic from the lifecycle method, lets write UI.</p>
+<pre>
+render() {
+  // Fetch the children as input
+  let tabs = this.querySelectorAll(&#x22;div&#x22;);
+
+  // Define basic structure
+  this.shadowRoot.innerHTML = &#x60;
+  &#x3C;div class=&#x27;tab-btn-container&#x27;&#x3E;&#x3C;/div&#x3E;
+  &#x3C;div class=&#x27;tab-panel-container&#x27;&#x3E;&#x3C;/div&#x3E;
+  &#x60;;
+  let btnContainer = this.shadowRoot.querySelector(&#x22;.tab-btn-container&#x22;);
+  let panelContainer = this.shadowRoot.querySelector(&#x22;.tab-panel-container&#x22;);
+
+  for (let index = 0; index &#x3C; tabs.length; index++) {
+    let currentTab = tabs[index];
+    this.addTab(currentTab, btnContainer, panelContainer)
+  }
+}
+
+/**
+* @param {HTMLElement} tab
+* @param {HTMLElement} btnContainer
+* @param {HTMLElement} panelContainer
+*/
+addTab(tab, btnContainer, panelContainer) {
+  let tabBtn = document.createElement(&#x22;button&#x22;);
+  let clonedTab = tab.cloneNode(true);
+  let thisNode = this;
+  let tabName = tab.getAttribute(&#x22;name&#x22;);
+  tabBtn.textContent = tabName;
+  tabBtn.setAttribute(&#x22;name&#x22;, tabName);
+  btnContainer.appendChild(tabBtn);
+  panelContainer.appendChild(clonedTab);
+}
+</pre>
+
+<p>Note <code>this.shadowRoot</code> is used to access the shadow DOM. It is available in all custom components.</p>
+<p>Next, we implement the selection state. At any time only one tab is active. Lets add a method to mark a tab active.</p>
+<pre>
+/**
+* @param {String} tabName
+*/
+activate(tabName) {
+  // Deactivate previously active tab if any
+  let activeBtn = this.shadowRoot.querySelector(&#x22;.tab-btn-container &#x3E; button.active&#x22;);
+  if (activeBtn !== null) {
+    activeBtn.classList.remove(&#x22;active&#x22;);
+  }
+  let activeTab = this.shadowRoot.querySelector(&#x22;.tab-panel-container &#x3E; div.active&#x22;);
+  if (activeTab !== null) {
+    activeTab.classList.remove(&#x22;active&#x22;);
+  }
+
+  // Mark provided tab as active
+  this.shadowRoot
+    .querySelector(&#x60;.tab-btn-container &#x3E; button[name=&#x27;${tabName}&#x27;]&#x60;)
+    .classList.add(&#x22;active&#x22;);
+
+  this.shadowRoot
+    .querySelector(&#x60;.tab-panel-container &#x3E; div[name=&#x27;${tabName}&#x27;]&#x60;)
+    .classList.add(&#x22;active&#x22;);
+}
+</pre>
+<p>This method activates a tab my adding a class active to it. This has to be triggered when the tab button is clicked. This is done as below.</p>
+<pre>
+tabBtn.addEventListener(&#x22;click&#x22;, function () {
+  thisNode.activate(tabName);
+})
+</pre>
+<p>Now we have interaction with our component, lets style it. Shadow DOM do not have a head tag, so we can directly attach style tag or link tag with stylesheets in the shadowRoot.</p>
+<pre>
+generateStyle() {
+  let style = document.createElement(&#x22;style&#x22;);
+  style.textContent =
+    &#x60;
+  *{
+    background-color: #13005A;
+    color: white;
+    font-size: 2rem;
+    font-family: sans-serif;
+  }
+  .tab-panel-container{
+    padding: 8px;
+  }
+  .tab-btn-container{
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+  }
+  .tab-panel-container &#x3E; div {
+    display: none;
+  }
+  .tab-panel-container &#x3E; div.active{
+    display: block;
+  }
+  .tab-btn-container{
+    display: flex;
+    gap: 8px;
+  }
+  .tab-btn-container &#x3E; button{
+    background-color: #4e6183;
+    border: none;
+    outline: none;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .tab-btn-container &#x3E; button.active{
+    background-color: #03C988;
+  }
+  &#x60;;
+  return style;
+}
+</pre>
+<p> Style is attached the same way as any other element.</p>
+<pre>
+  this.shadowRoot.appendChild(this.generateStyle())
+</pre>
+<p>Thats it. The tab component is ready. There are some concepts not used here worth mentioning are custom attribute, template and slots. Use only whatever required for the components.</p>
