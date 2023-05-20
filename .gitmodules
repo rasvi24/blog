@@ -1,0 +1,3 @@
+[submodule "blog.rasv.io"]
+	path = blog.rasv.io
+	url = https://github.com/rasvi24/blog.rasvi.io.git
