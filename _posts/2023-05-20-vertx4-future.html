@@ -1,0 +1,50 @@
+---
+layout: post
+title:  "Vert.x 4 Future"
+date:   2023-05-20 11:07:00 +0530
+categories: java
+---
+
+<p>Vert.x is a highly performant asynchronous library. It is a great fit for IO heavy applications. Good thing about vert.x is, it is just a library that you can create the objects anywhere and use it out of the box. You can easily embed this to your application. Vert.x 4 has added Future support. This Future <span><code>io.vertx.core.Future</code></span> is not same as <span><code>java.util.concurrent.Future</code></span> You can refer the javadoc <a target="_blank" href="https://vertx.io/docs/apidocs/io/vertx/core/Future.html">here</a>.</p>
+<p>You need to include the maven dependency. Or you can clone this <a href="https://github.com/rasvi24/vertx-web-future">repository</a></p>
+<pre>
+&#x3C;dependency&#x3E;
+  &#x3C;groupId&#x3E;io.vertx&#x3C;/groupId&#x3E;
+  &#x3C;artifactId&#x3E;vertx-web-client&#x3C;/artifactId&#x3E;
+  &#x3C;version&#x3E;4.4.2&#x3C;/version&#x3E;
+&#x3C;/dependency&#x3E;
+</pre>
+<p>Every asynchronous operation method from Vert.x has an alternate version of it to return a Future. Prior to Vert.x 4 every asynchronous operation needs to be passed a callback which leads to callback hell. Lets look at a http client usage.</p>
+<h4>Vert.x 3 callback</h4>
+<pre>
+client.getAbs(url).send(response -&#x3E; {
+  System.out.println(&#x22;Response: &#x22;+ response);
+});
+</pre>
+<h4>Vert.x 4 Future</h4>
+<pre>
+Future&#x3C;HttpResponse&#x3C;Buffer&#x3E;&#x3E; future = client.getAbs(url).send();
+future.onComplete(response -&#x3E; {
+  System.out.println(&#x22;Response: &#x22; + response);
+});
+</pre>
+
+<p>They both seem to be similar at first. The Future version still has callback for onComplete. This is very useful when we pass around the future to different part of the code and continue the completion there. This usage avoids callback hell or nesting callbacks on multiple levels.</p>
+<h4>compose</h4>
+<p>Let's take an example with a shortened link. On hitting the shortened link gives the original link. This means we need to perform two asynchronous operations and the second operation is dependant on the first operation. This can be written in Vert.x 4 without nesting callbacks.</p>
+<pre>
+Future&#x3C;HttpResponse&#x3C;Buffer&#x3E;&#x3E; future = client.getAbs(shortLink).send();
+future.compose(resp -&#x3E; {
+    String originalLink = resp.bodyAsString();
+    return client.getAbs(originalLink).send();
+});</pre>
+<p>The compose method from Future returns another Future. it is useful to chain multiple dependant operations as if they were written line by line in a blocking java code. This Future object now can be returned to anywhere in the code to execute different operation with the result of it.</p>
+
+<h4>map</h4>
+<p>You can use map method to transform the result of the future. The mapping operation is done asynchronously when the result is available.</p>
+<pre>
+public Future&#x3C;JsonObject&#x3E; fetchJsonData(WebClient client, String url) {
+  Future&#x3C;HttpResponse&#x3C;Buffer&#x3E;&#x3E; future = client.getAbs(url).send();
+  return future.map(res -&#x3E; res.bodyAsJsonObject());
+}
+</pre>
