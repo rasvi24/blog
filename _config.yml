@@ -28,8 +28,9 @@ github_username:  rasvi24
 google_analytics: "G-76YBPTXB5Y"
 
 # Build settings
-theme: minima
+remote_theme: jekyll/minima
 plugins:
+  - jekyll-remote-theme
   - jekyll-feed
 
 defaults:
