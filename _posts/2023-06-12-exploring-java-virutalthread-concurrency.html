@@ -1,0 +1,357 @@
+---
+layout: post
+title: "Benchmarking Java Virtual Thread Performance"
+date: 2023-06-12 00:36:00 +0530
+categories: java
+permalink: 2023-06-12-Benchmarking-java-virtualthread-Performance
+---
+<script>
+    (function init() {
+        styles = `
+        p {
+            text-align: justify;
+        }
+        pre {
+            background: none;
+            border: none;
+        }
+        `;
+        let styleSheet = document.createElement("style");
+        styleSheet.innerText = styles;
+        document.head.appendChild(styleSheet)
+    })();
+</script>
+<p>Virtual thread is set to be released in JDK 21. This feature will bring significant benefits to many IO-bound frameworks. It will alleviate the burden on Java developers like me from having to write reactive-style code. The following tests have been conducted using JDK 21 EA build 25. CPU: Ryzen 4800H mobile.</p>
+
+<h3>JVM Memory and Startup Time</h3>
+<p>Java is presumed to consume more memory in general. Lets see how much memory a hello world program uses and explore how it grows by adding dependencies.</p>
+
+<!-- HTML generated using hilite.me -->
+<div
+    style="background: #272822; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;">
+    <pre style="margin: 0; line-height: 125%;background: none;border: none;"><span style="color: #66d9ef">public</span> <span style="color: #66d9ef">static</span> <span style="color: #66d9ef">void</span> <span style="color: #a6e22e">main</span><span style="color: #f92672">(</span><span style="color: #f8f8f2">String</span><span style="color: #f92672">[]</span> <span style="color: #f8f8f2">args</span><span style="color: #f92672">)</span> <span style="color: #66d9ef">throws</span> <span style="color: #f8f8f2">Exception</span> <span style="color: #f92672">{</span>
+    <span style="color: #f8f8f2">System</span><span style="color: #f92672">.</span><span style="color: #a6e22e">out</span><span style="color: #f92672">.</span><span style="color: #a6e22e">println</span><span style="color: #f92672">(</span><span style="color: #e6db74">&quot;hello world&quot;</span><span style="color: #f92672">);</span>
+    <span style="color: #f8f8f2">Thread</span><span style="color: #f92672">.</span><span style="color: #a6e22e">sleep</span><span style="color: #f92672">(</span><span style="color: #f8f8f2">Duration</span><span style="color: #f92672">.</span><span style="color: #a6e22e">ofSeconds</span><span style="color: #f92672">(</span><span style="color: #ae81ff">100</span><span style="color: #f92672">));</span>
+<span style="color: #f92672">}</span>
+</pre>
+</div>
+
+<p>
+    The maximum resident set size (RSS) memory used is measured at 44104 or approximately 44MB. This result is not bad, as I anticipated a higher value. However, let us now examine the actual heap usage.
+</p>
+<img src="/assets/images/jdk21-vt/heap-initial.png" />
+
+<p>Upon starting Visual VM, the JVM immediately spawns multiple threads to facilitate the recording and monitoring of its memory usage. Consequently, this results in an increased resident set size (RSS) of 117MB. However, it is worth noting that the heap usage remains relatively low, at approximately <b>11MB</b>. Now, let us proceed to limit the memory usage and observe how low we can potentially reduce the RSS.</p>
+<pre>java -Xmx15m -Xms15m -jar target/jarfilename.jar</pre>
+<img src="/assets/images/jdk21-vt/minimum-jvm-rss.png" />
+<p>The resident set size (RSS) is measured at 41420 or 41MB, which appears to be the minimum memory usage of the JVM. Surprisingly, the heap usage is a mere <b>7MB</b>.</p>
+<p>I also attempted to time the "Hello World" program without any sleep. It took approximately 41ms to complete, indicating that the JVM startup time is at most <b>41ms</b>.</p>
+
+<!-- HTML generated using hilite.me --><div style="background: #272822; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #f8f8f2">$</span> <span style="color: #f8f8f2">time</span> <span style="color: #f92672">~/</span><span style="color: #f8f8f2">jdk</span><span style="color: #f92672">-</span><span style="color: #ae81ff">21</span><span style="color: #f92672">/</span><span style="color: #f8f8f2">bin</span><span style="color: #f92672">/</span><span style="color: #f8f8f2">java</span> <span style="color: #f92672">-</span><span style="color: #f8f8f2">Xmx15m</span> <span style="color: #f92672">-</span><span style="color: #f8f8f2">Xms15m</span> <span style="color: #f92672">-</span><span style="color: #f8f8f2">jar</span> <span style="color: #f8f8f2">target</span><span style="color: #f92672">/</span><span style="color: #f8f8f2">jarfile</span><span style="color: #f92672">.</span><span style="color: #a6e22e">jar</span>
+<span style="color: #f8f8f2">hello</span> <span style="color: #f8f8f2">world</span>
+
+<span style="color: #f8f8f2">real</span>    <span style="color: #ae81ff">0</span><span style="color: #f8f8f2">m0</span><span style="color: #f92672">.</span><span style="color: #ae81ff">042</span><span style="color: #f8f8f2">s</span>
+<span style="color: #f8f8f2">user</span>    <span style="color: #ae81ff">0</span><span style="color: #f8f8f2">m0</span><span style="color: #f92672">.</span><span style="color: #ae81ff">031</span><span style="color: #f8f8f2">s</span>
+<span style="color: #f8f8f2">sys</span>     <span style="color: #ae81ff">0</span><span style="color: #f8f8f2">m0</span><span style="color: #f92672">.</span><span style="color: #ae81ff">021</span><span style="color: #f8f8f2">s</span>
+</pre></div>
+<br/>
+<h3>Benchmarking Tomcat Server</h3>
+<p>So far, the JVM has been performing well. Now, let's examine its performance in serving HTTP requests. For this test, we have selected Tomcat 11-M7 embedded. This particular version offers an option to utilize virtual threads, which can be configured either in the server.xml file or programmatically within the embedded Tomcat. The Maven dependency for this setup is:</p>
+<!-- HTML generated using hilite.me --><div style="background: #272822; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #f92672">&lt;</span><span style="color: #f8f8f2">dependency</span><span style="color: #f92672">&gt;</span>
+    <span style="color: #f92672">&lt;</span><span style="color: #f8f8f2">groupId</span><span style="color: #f92672">&gt;</span><span style="color: #f8f8f2">org</span><span style="color: #f92672">.</span><span style="color: #a6e22e">apache</span><span style="color: #f92672">.</span><span style="color: #a6e22e">tomcat</span><span style="color: #f92672">.</span><span style="color: #a6e22e">embed</span><span style="color: #f92672">&lt;/</span><span style="color: #f8f8f2">groupId</span><span style="color: #f92672">&gt;</span>
+    <span style="color: #f92672">&lt;</span><span style="color: #f8f8f2">artifactId</span><span style="color: #f92672">&gt;</span><span style="color: #f8f8f2">tomcat</span><span style="color: #f92672">-</span><span style="color: #f8f8f2">embed</span><span style="color: #f92672">-</span><span style="color: #f8f8f2">core</span><span style="color: #f92672">&lt;/</span><span style="color: #f8f8f2">artifactId</span><span style="color: #f92672">&gt;</span>
+    <span style="color: #f92672">&lt;</span><span style="color: #f8f8f2">version</span><span style="color: #f92672">&gt;</span><span style="color: #ae81ff">11.0</span><span style="color: #f92672">.</span><span style="color: #ae81ff">0</span><span style="color: #f92672">-</span><span style="color: #f8f8f2">M7</span><span style="color: #f92672">&lt;/</span><span style="color: #f8f8f2">version</span><span style="color: #f92672">&gt;</span>
+<span style="color: #f92672">&lt;/</span><span style="color: #f8f8f2">dependency</span><span style="color: #f92672">&gt;</span>
+</pre></div>
+<h4>Hello World Servlet</h4>
+<p>This code is a straightforward HTTP servlet that sends a "Hello World" response.</p>
+<!-- HTML generated using hilite.me --><div style="background: #272822; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #f92672">package</span> <span style="color: #f8f8f2">blog</span><span style="color: #f92672">.</span><span style="color: #a6e22e">rasvi</span><span style="color: #f92672">.</span><span style="color: #a6e22e">io</span><span style="color: #f92672">.</span><span style="color: #a6e22e">tomcat</span><span style="color: #f92672">.</span><span style="color: #a6e22e">vte</span><span style="color: #f92672">;</span>
+
+<span style="color: #f92672">import</span> <span style="color: #f8f8f2">jakarta.servlet.ServletException</span><span style="color: #f92672">;</span>
+<span style="color: #f92672">import</span> <span style="color: #f8f8f2">jakarta.servlet.http.HttpServlet</span><span style="color: #f92672">;</span>
+<span style="color: #f92672">import</span> <span style="color: #f8f8f2">jakarta.servlet.http.HttpServletRequest</span><span style="color: #f92672">;</span>
+<span style="color: #f92672">import</span> <span style="color: #f8f8f2">jakarta.servlet.http.HttpServletResponse</span><span style="color: #f92672">;</span>
+<span style="color: #f92672">import</span> <span style="color: #f8f8f2">java.io.File</span><span style="color: #f92672">;</span>
+<span style="color: #f92672">import</span> <span style="color: #f8f8f2">java.io.IOException</span><span style="color: #f92672">;</span>
+<span style="color: #f92672">import</span> <span style="color: #f8f8f2">org.apache.catalina.connector.Connector</span><span style="color: #f92672">;</span>
+<span style="color: #f92672">import</span> <span style="color: #f8f8f2">org.apache.catalina.startup.Tomcat</span><span style="color: #f92672">;</span>
+<span style="color: #f92672">import</span> <span style="color: #f8f8f2">org.apache.coyote.http11.Http11NioProtocol</span><span style="color: #f92672">;</span>
+<span style="color: #f92672">import</span> <span style="color: #f8f8f2">org.apache.tomcat.util.net.NioEndpoint</span><span style="color: #f92672">;</span>
+    
+<span style="color: #66d9ef">public</span> <span style="color: #66d9ef">class</span> <span style="color: #a6e22e">TempRunner</span> <span style="color: #f92672">{</span>
+
+    <span style="color: #66d9ef">public</span> <span style="color: #66d9ef">static</span> <span style="color: #66d9ef">void</span> <span style="color: #a6e22e">main</span><span style="color: #f92672">(</span><span style="color: #f8f8f2">String</span> <span style="color: #f8f8f2">args</span><span style="color: #f92672">[])</span> <span style="color: #66d9ef">throws</span> <span style="color: #f8f8f2">Exception</span> <span style="color: #f92672">{</span>
+        <span style="color: #f8f8f2">Tomcat</span> <span style="color: #f8f8f2">tomcat</span> <span style="color: #f92672">=</span> <span style="color: #66d9ef">new</span> <span style="color: #f8f8f2">Tomcat</span><span style="color: #f92672">();</span>
+        <span style="color: #f8f8f2">var</span> <span style="color: #f8f8f2">endPoint</span> <span style="color: #f92672">=</span> <span style="color: #66d9ef">new</span> <span style="color: #f8f8f2">NioEndpoint</span><span style="color: #f92672">();</span>
+        <span style="color: #f8f8f2">endPoint</span><span style="color: #f92672">.</span><span style="color: #a6e22e">setPort</span><span style="color: #f92672">(</span><span style="color: #ae81ff">8080</span><span style="color: #f92672">);</span>
+        <span style="color: #f8f8f2">var</span> <span style="color: #f8f8f2">connector</span> <span style="color: #f92672">=</span> <span style="color: #66d9ef">new</span> <span style="color: #f8f8f2">Connector</span><span style="color: #f92672">(</span><span style="color: #66d9ef">new</span> <span style="color: #f8f8f2">Http11NioProtocol</span><span style="color: #f92672">(</span><span style="color: #f8f8f2">endPoint</span><span style="color: #f92672">));</span>
+        <span style="color: #f8f8f2">tomcat</span><span style="color: #f92672">.</span><span style="color: #a6e22e">setConnector</span><span style="color: #f92672">(</span><span style="color: #f8f8f2">connector</span><span style="color: #f92672">);</span>
+        <span style="color: #f8f8f2">var</span> <span style="color: #f8f8f2">ctx</span> <span style="color: #f92672">=</span> <span style="color: #f8f8f2">tomcat</span><span style="color: #f92672">.</span><span style="color: #a6e22e">addContext</span><span style="color: #f92672">(</span><span style="color: #e6db74">&quot;&quot;</span><span style="color: #f92672">,</span> <span style="color: #66d9ef">new</span> <span style="color: #f8f8f2">File</span><span style="color: #f92672">(</span><span style="color: #e6db74">&quot;.&quot;</span><span style="color: #f92672">)</span>
+                <span style="color: #f92672">.</span><span style="color: #a6e22e">getAbsolutePath</span><span style="color: #f92672">());</span>
+        <span style="color: #f8f8f2">Tomcat</span><span style="color: #f92672">.</span><span style="color: #a6e22e">addServlet</span><span style="color: #f92672">(</span><span style="color: #f8f8f2">ctx</span><span style="color: #f92672">,</span> <span style="color: #e6db74">&quot;Servlet&quot;</span><span style="color: #f92672">,</span> <span style="color: #66d9ef">new</span> <span style="color: #f8f8f2">HttpServlet</span><span style="color: #f92672">()</span> <span style="color: #f92672">{</span>
+            <span style="color: #a6e22e">@Override</span>
+            <span style="color: #66d9ef">protected</span> <span style="color: #66d9ef">void</span> <span style="color: #a6e22e">doGet</span><span style="color: #f92672">(</span><span style="color: #f8f8f2">HttpServletRequest</span> <span style="color: #f8f8f2">req</span><span style="color: #f92672">,</span> <span style="color: #f8f8f2">HttpServletResponse</span> <span style="color: #f8f8f2">resp</span><span style="color: #f92672">)</span> 
+                    <span style="color: #66d9ef">throws</span> <span style="color: #f8f8f2">ServletException</span><span style="color: #f92672">,</span> <span style="color: #f8f8f2">IOException</span> <span style="color: #f92672">{</span>
+                <span style="color: #66d9ef">try</span> <span style="color: #f92672">(</span><span style="color: #f8f8f2">var</span> <span style="color: #f8f8f2">writer</span> <span style="color: #f92672">=</span> <span style="color: #f8f8f2">resp</span><span style="color: #f92672">.</span><span style="color: #a6e22e">getWriter</span><span style="color: #f92672">())</span> <span style="color: #f92672">{</span>
+                    <span style="color: #f8f8f2">writer</span><span style="color: #f92672">.</span><span style="color: #a6e22e">println</span><span style="color: #f92672">(</span><span style="color: #e6db74">&quot;Hello world!&quot;</span><span style="color: #f92672">);</span>
+                <span style="color: #f92672">}</span> <span style="color: #66d9ef">catch</span> <span style="color: #f92672">(</span><span style="color: #f8f8f2">Exception</span> <span style="color: #f8f8f2">ex</span><span style="color: #f92672">)</span> <span style="color: #f92672">{</span>
+                    <span style="color: #66d9ef">throw</span> <span style="color: #f8f8f2">ex</span><span style="color: #f92672">;</span>
+                <span style="color: #f92672">}</span>
+            <span style="color: #f92672">}</span>
+
+        <span style="color: #f92672">});</span>
+        <span style="color: #f8f8f2">ctx</span><span style="color: #f92672">.</span><span style="color: #a6e22e">addServletMappingDecoded</span><span style="color: #f92672">(</span><span style="color: #e6db74">&quot;/*&quot;</span><span style="color: #f92672">,</span> <span style="color: #e6db74">&quot;Servlet&quot;</span><span style="color: #f92672">);</span>
+        <span style="color: #f8f8f2">tomcat</span><span style="color: #f92672">.</span><span style="color: #a6e22e">start</span><span style="color: #f92672">();</span>
+        <span style="color: #f8f8f2">tomcat</span><span style="color: #f92672">.</span><span style="color: #a6e22e">getServer</span><span style="color: #f92672">().</span><span style="color: #a6e22e">await</span><span style="color: #f92672">();</span>
+    <span style="color: #f92672">}</span>
+<span style="color: #f92672">}</span>
+</pre></div>
+<p>Please note that I utilized the <b>NIO</b> endpoint instead of NIO2. It is important to mention that NIO2 does not dispatch requests within virtual threads.</p>
+<img src="/assets/images/jdk21-vt/tomcatheapinit.png" />
+<p>The heap usage is <b>~35MB</b>, since the heap usage is very low, lets limit to 50MB with Xmx50m</p>
+<img src="/assets/images/jdk21-vt/tomcat-xmx50.png" />
+<p>This usage is stable. The spikes in the graph are due to running benchmark. Adding below.</p>
+
+<!-- HTML generated using hilite.me --><div style="background: #ffffff; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #996633">$ </span>ab -k -n 100000 -c 100 http://127.0.0.1:8080/
+This is ApacheBench, Version 2.3 &lt;<span style="color: #996633">$Revision</span>: 1879490 <span style="color: #996633">$&gt;</span>
+Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
+Licensed to The Apache Software Foundation, http://www.apache.org/
+
+Benchmarking 127.0.0.1 <span style="color: #333333">(</span>be patient<span style="color: #333333">)</span>
+Server Software:
+Server Hostname:        127.0.0.1
+Server Port:            8080
+
+Document Path:          /
+Document Length:        13 bytes
+
+Concurrency Level:      100
+Time taken <span style="color: #008800; font-weight: bold">for </span>tests:   0.605 seconds
+Complete requests:      100000
+Failed requests:        0
+Keep-Alive requests:    99041
+Total transferred:      13472189 bytes
+HTML transferred:       1300000 bytes
+Requests per second:    165298.27 <span style="color: #333333">[</span><span style="color: #888888">#/sec] (mean)</span>
+Time per request:       0.605 <span style="color: #333333">[</span>ms<span style="color: #333333">]</span> <span style="color: #333333">(</span>mean<span style="color: #333333">)</span>
+Time per request:       0.006 <span style="color: #333333">[</span>ms<span style="color: #333333">]</span> <span style="color: #333333">(</span>mean, across all concurrent requests<span style="color: #333333">)</span>
+Transfer rate:          21747.36 <span style="color: #333333">[</span>Kbytes/sec<span style="color: #333333">]</span> received
+
+Connection Times <span style="color: #333333">(</span>ms<span style="color: #333333">)</span>
+                min  mean<span style="color: #333333">[</span>+/-sd<span style="color: #333333">]</span> median   max
+Connect:        0    0   0.1      0       2
+Processing:     0    1   0.5      0       6
+Waiting:        0    1   0.5      0       6
+Total:          0    1   0.5      0       6
+
+Percentage of the requests served within a certain <span style="color: #007020">time</span> <span style="color: #333333">(</span>ms<span style="color: #333333">)</span>
+    50%      0
+    66%      1
+    75%      1
+    80%      1
+    90%      1
+    95%      1
+    98%      3
+    99%      3
+    100%      6 <span style="color: #333333">(</span>longest request<span style="color: #333333">)</span>
+</pre></div>
+
+<p>Disclaimer: No new threads were created during this test :). The benchmark sends 100k requests with a concurrency level set to 100. It is truly remarkable to observe that 100k requests are sent within 0.6 seconds, resulting in a request per second (req/s) rate of 165k. Furthermore, these operations are accomplished with a mere 35MB of heap usage. The resident set size (RSS) is recorded at <b>180MB</b>. Let us proceed to benchmark this scenario once again using wrk.</p>
+<h4>100 Connections, -Xmx50m</h4>
+<!-- HTML generated using hilite.me --><div style="background: #ffffff; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #996633">$ </span>wrk -t 4 -d 100 -c 100 -d 10 http://127.0.0.1:8080/
+Running 10s <span style="color: #007020">test</span> @ http://127.0.0.1:8080/
+4 threads and 100 connections
+Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   365.46us  394.67us  10.26ms   89.73%
+    Req/Sec    82.12k     7.30k  135.75k    79.65%
+3292508 requests in 10.10s, 273.77MB <span style="color: #007020">read</span>
+Requests/sec: 326002.77
+Transfer/sec:     27.11MB
+</pre></div>
+<p>326K req/s is really good. Another test was conducted with 1000 concurrent connections using a maximum heap size (-Xmx) of 50m.</p>
+<h4>1000 Connections, -Xmx50m</h4>
+<!-- HTML generated using hilite.me --><div style="background: #ffffff; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #996633">$ </span>wrk -t 20 -d 100 -c 1000 -d 10 http://127.0.0.1:8080/
+Running 10s <span style="color: #007020">test</span> @ http://127.0.0.1:8080/
+20 threads and 1000 connections
+Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     4.28ms    5.48ms 313.56ms   98.91%
+    Req/Sec    11.79k     2.92k   50.05k    92.49%
+2318520 requests in 10.07s, 192.78MB <span style="color: #007020">read</span>
+Requests/sec: 230252.83
+Transfer/sec:     19.14MB
+</pre></div>
+
+<p>It is remarkable that this does not utilize more memory. The resident set size (RSS) remains at <b>180M</b>, even with 1000 concurrent requests. It appears that virtual threads, in the end, do not consume a significant amount of memory.</p>
+<h4>1000 Connections, no -Xmx</h4>
+<p>Benchmarking 1000 connections without -Xmx below:</p>
+<!-- HTML generated using hilite.me --><div style="background: #ffffff; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #996633">$ </span>wrk -t 20 -c 1000 -d 10s --timeout 5s http://127.0.0.1:8080/
+Running 10s <span style="color: #007020">test</span> @ http://127.0.0.1:8080/
+20 threads and 1000 connections
+Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     2.52ms    1.77ms  48.43ms   79.97%
+    Req/Sec    21.00k     6.63k  156.35k    95.87%
+4206219 requests in 10.05s, 349.74MB <span style="color: #007020">read</span>
+Requests/sec: 418733.75
+Transfer/sec:     34.82MB
+</pre></div>
+<p>RSS at 600M and heap is at 300/400MB. This suddenly is not impressive. 300M for 1000 requests means 3GB for 10k requests and 7.5GB for 25K requests approximately. :(</p>
+<h4>25k Connections (failure)</h4>
+<p>Dispatching 1000 threads does not result in a memory usage of 1000MB. However, let us push the boundaries even further by testing with 25,000 concurrent requests.</p>
+
+<!-- HTML generated using hilite.me --><div style="background: #ffffff; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #996633">$ </span>wrk -t 20 -d 100 -c 25000 -d 2s http://127.0.0.1:8080/
+    unable to create thread 6: Too many open files
+</pre></div>
+
+<p></p>
+
+<h4>25k Connections - tomcat</h4>
+<p>🤦 I had to fight with TCP/IP stack of linux to run this test. In addition to tweaking kernel parameters, the tomcat connector is configured to handle high concurrency.</p>
+
+<!-- HTML generated using hilite.me --><div style="background: #272822; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #f8f8f2">var</span> <span style="color: #f8f8f2">endPoint</span> <span style="color: #f92672">=</span> <span style="color: #66d9ef">new</span> <span style="color: #f8f8f2">NioEndpoint</span><span style="color: #f92672">();</span>
+<span style="color: #f8f8f2">endPoint</span><span style="color: #f92672">.</span><span style="color: #a6e22e">setMaxConnections</span><span style="color: #f92672">(</span><span style="color: #ae81ff">100</span><span style="color: #f8f8f2">_000</span><span style="color: #f92672">);</span>
+<span style="color: #f8f8f2">endPoint</span><span style="color: #f92672">.</span><span style="color: #a6e22e">setMaxThreads</span><span style="color: #f92672">(</span><span style="color: #ae81ff">100</span><span style="color: #f8f8f2">_000</span><span style="color: #f92672">);</span>
+<span style="color: #f8f8f2">endPoint</span><span style="color: #f92672">.</span><span style="color: #a6e22e">setMaxKeepAliveRequests</span><span style="color: #f92672">(</span><span style="color: #ae81ff">100</span><span style="color: #f8f8f2">_000</span><span style="color: #f92672">);</span>
+<span style="color: #f8f8f2">endPoint</span><span style="color: #f92672">.</span><span style="color: #a6e22e">setAcceptCount</span><span style="color: #f92672">(</span><span style="color: #ae81ff">100</span><span style="color: #f8f8f2">_000</span><span style="color: #f92672">);</span>
+<span style="color: #f8f8f2">endPoint</span><span style="color: #f92672">.</span><span style="color: #a6e22e">setPort</span><span style="color: #f92672">(</span><span style="color: #ae81ff">8080</span><span style="color: #f92672">);</span>
+<span style="color: #f8f8f2">endPoint</span><span style="color: #f92672">.</span><span style="color: #a6e22e">setUseVirtualThreads</span><span style="color: #f92672">(</span><span style="color: #66d9ef">true</span><span style="color: #f92672">);</span>
+<span style="color: #f8f8f2">var</span> <span style="color: #f8f8f2">connector</span> <span style="color: #f92672">=</span> <span style="color: #66d9ef">new</span> <span style="color: #f8f8f2">Connector</span><span style="color: #f92672">(</span><span style="color: #66d9ef">new</span> <span style="color: #f8f8f2">Http11NioProtocol</span><span style="color: #f92672">(</span><span style="color: #f8f8f2">endPoint</span><span style="color: #f92672">));</span>
+</pre></div>
+<br />
+  
+<!-- HTML generated using hilite.me --><div style="background: #ffffff; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #996633">$ </span>wrk -t 20 -c 25000 -d 10s --timeout 15s http://127.0.0.1:8080/
+Running 10s <span style="color: #007020">test</span> @ http://127.0.0.1:8080/
+20 threads and 25000 connections
+Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   346.99ms  812.16ms   5.54s    89.58%
+    Req/Sec    26.95k    17.66k   53.92k    49.73%
+5043788 requests in 10.09s, 418.48MB <span style="color: #007020">read</span>
+Requests/sec: 499724.27
+Transfer/sec:     41.46MB
+</pre></div>
+  
+<p>The benchmark executed successfully, with the resident set size <b>(RSS)</b> reaching <b>2350MB</b> and the heap reaching <b>2112MB</b>. These values are considered decent for 25k concurrent connections, although not as high as the anticipated 7.5GB. It is important to note that we are discussing actual HTTP connections here, which involve more than just spinning off multiple threads.</p>
+
+<h4>25k Connections, 10s sleep - tomcat</h4>
+<p>Adding a sleep before writing response, because you know we use virtual threads. This test is to hold 25k connections for 10 seconds.</p>
+<!-- HTML generated using hilite.me --><div style="background: #272822; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #f8f8f2">Thread</span><span style="color: #f92672">.</span><span style="color: #a6e22e">sleep</span><span style="color: #f92672">(</span><span style="color: #f8f8f2">Duration</span><span style="color: #f92672">.</span><span style="color: #a6e22e">ofSeconds</span><span style="color: #f92672">(</span><span style="color: #ae81ff">10</span><span style="color: #f92672">));</span>
+<span style="color: #f8f8f2">writer</span><span style="color: #f92672">.</span><span style="color: #a6e22e">println</span><span style="color: #f92672">(</span><span style="color: #e6db74">&quot;Hello world!&quot;</span><span style="color: #f92672">);</span>
+</pre></div>
+
+
+<!-- HTML generated using hilite.me --><div style="background: #ffffff; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #996633">$ </span>wrk -t 25 -c 25000 -d 15s --timeout 15s http://127.0.0.1:8080/
+Running 15s <span style="color: #007020">test</span> @ http://127.0.0.1:8080/
+25 threads and 25000 connections
+Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    11.51s   517.08ms  12.31s    68.52%
+    Req/Sec     1.34k     1.42k    9.59k    88.89%
+25000 requests in 15.08s, 2.07MB <span style="color: #007020">read</span>
+Requests/sec:   1658.35
+Transfer/sec:    140.90KB
+</pre></div>
+  
+  
+<p>When blocking 25k connections, the resident set size <b>(RSS)</b> eventually reaches <b>3.8GB</b>, while the heap size reaches 3.2GB. The req/s doesn't matter much as most of the time the server only waits in sleep. In a practical scenario it would be waiting for database or signal from another service. An example scenario is to send live score of a sport to 25k users. When live score is updated all 25k waiting connections will be sent the current live score. The memory usage is is really good, but how good is this? One of the most memory efficient and safe language is Rust. Let's compare with it just because of curiosity.</p>
+
+
+<h3>Rust Axum</h3>
+<p>The rust example uses axum framework with a similar hello world request handler. The program is built with --release flag and the version is 1.70.0.</p>
+
+
+<!-- HTML generated using hilite.me --><div style="background: #272822; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #66d9ef">use</span> <span style="color: #f8f8f2">axum</span><span style="color: #f92672">::</span><span style="color: #f8f8f2">{routing</span><span style="color: #f92672">::</span><span style="color: #f8f8f2">get,</span> <span style="color: #f8f8f2">Router};</span>
+<span style="color: #66d9ef">use</span> <span style="color: #f8f8f2">std</span><span style="color: #f92672">::</span><span style="color: #f8f8f2">net</span><span style="color: #f92672">::</span><span style="color: #f8f8f2">SocketAddr;</span>
+<span style="color: #66d9ef">use</span> <span style="color: #f8f8f2">tokio</span><span style="color: #f92672">::</span><span style="color: #f8f8f2">time</span><span style="color: #f92672">::</span><span style="color: #f8f8f2">{sleep,</span> <span style="color: #f8f8f2">Duration};</span>
+
+<span style="color: #75715e">#[tokio::main]</span>
+<span style="color: #f8f8f2">async</span> <span style="color: #66d9ef">fn</span> <span style="color: #f8f8f2">main()</span> <span style="color: #f8f8f2">{</span>
+    <span style="color: #75715e">// build our application with a route</span>
+    <span style="color: #66d9ef">let</span> <span style="color: #f8f8f2">app</span> <span style="color: #f92672">=</span> <span style="color: #f8f8f2">Router</span><span style="color: #f92672">::</span><span style="color: #f8f8f2">new().route(</span><span style="color: #e6db74">&quot;/&quot;</span><span style="color: #f8f8f2">,</span> <span style="color: #f8f8f2">get(root));</span>
+
+    <span style="color: #75715e">// run our app with hyper</span>
+    <span style="color: #75715e">// `axum::Server` is a re-export of `hyper::Server`</span>
+    <span style="color: #66d9ef">let</span> <span style="color: #f8f8f2">addr</span> <span style="color: #f92672">=</span> <span style="color: #f8f8f2">SocketAddr</span><span style="color: #f92672">::</span><span style="color: #f8f8f2">from(([</span><span style="color: #ae81ff">127</span><span style="color: #f8f8f2">,</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2">,</span> <span style="color: #ae81ff">0</span><span style="color: #f8f8f2">,</span> <span style="color: #ae81ff">1</span><span style="color: #f8f8f2">],</span> <span style="color: #ae81ff">3000</span><span style="color: #f8f8f2">));</span>
+    <span style="color: #f8f8f2">axum</span><span style="color: #f92672">::</span><span style="color: #f8f8f2">Server</span><span style="color: #f92672">::</span><span style="color: #f8f8f2">bind(</span><span style="color: #f92672">&amp;</span><span style="color: #f8f8f2">addr)</span>
+        <span style="color: #f8f8f2">.serve(app.into_make_service())</span>
+        <span style="color: #f8f8f2">.await</span>
+        <span style="color: #f8f8f2">.unwrap();</span>
+<span style="color: #f8f8f2">}</span>
+
+<span style="color: #75715e">// basic handler that responds with a static string</span>
+<span style="color: #f8f8f2">async</span> <span style="color: #66d9ef">fn</span> <span style="color: #f8f8f2">root()</span> <span style="color: #f92672">-&gt;</span> <span style="color: #f92672">&amp;</span><span style="color: #960050; background-color: #1e0010">&#39;</span><span style="color: #66d9ef">static</span> <span style="color: #66d9ef">str</span> <span style="color: #f8f8f2">{</span>
+    <span style="color: #f8f8f2">sleep(Duration</span><span style="color: #f92672">::</span><span style="color: #f8f8f2">from_secs(</span><span style="color: #ae81ff">10</span><span style="color: #f8f8f2">)).await;</span>
+    <span style="color: #e6db74">&quot;Hello, World!&quot;</span>
+<span style="color: #f8f8f2">}</span>
+</pre></div>
+<br/>
+<p>It seems that there is no straightforward method to limit the number of concurrent connections within the framework. I speculate that the framework has a restriction on the number of streams per HTTP/2 connection, resulting in the failure of the wrk benchmark to send 25k requests. To address this issue, I increased the number of threads in wrk as a workaround. This approach assumes that in wrk, each thread establishes a new connection, thereby reducing the number of streams per connection.</p>
+<h4>25k Connections with sleep for 10s - Rust Axum</h4>
+<!-- HTML generated using hilite.me --><div style="background: #ffffff; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #996633">$ </span>wrk -t 500 -c 25000 -d 15s --timeout 15s http://127.0.0.1:3000/
+Running 15s <span style="color: #007020">test</span> @ http://127.0.0.1:3000/
+500 threads and 25000 connections
+Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    10.00s   470.99us  10.00s    65.14%
+    Req/Sec     4.00      0.00     4.00    100.00%
+25000 requests in 15.10s, 3.10MB <span style="color: #007020">read</span>
+Requests/sec:   1655.39
+Transfer/sec:    210.16KB
+</pre></div>
+<p>At the end, RSS usage of the rust program is at <b>537MB</b>. Compared to Java's <b>3.8GB</b> Rust is 7 times more memory efficient. I would say it is not bad.</p>
+
+<h3>Vert.x Web</h3>
+<p>Let's go even further by switching the java server. I have a feeling tomcat uses more memory per request. Let's try vert.x web. I use smallrye mutiny flavor of Vert.x.</p>
+
+
+<!-- HTML generated using hilite.me --><div style="background: #272822; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #f92672">package</span> <span style="color: #f8f8f2">blog</span><span style="color: #f92672">.</span><span style="color: #a6e22e">rasvi</span><span style="color: #f92672">.</span><span style="color: #a6e22e">io</span><span style="color: #f92672">.</span><span style="color: #a6e22e">tomcat</span><span style="color: #f92672">.</span><span style="color: #a6e22e">vte</span><span style="color: #f92672">;</span>
+
+<span style="color: #f92672">import</span> <span style="color: #f8f8f2">io.vertx.core.http.Http2Settings</span><span style="color: #f92672">;</span>
+<span style="color: #f92672">import</span> <span style="color: #f8f8f2">io.vertx.core.http.HttpServerOptions</span><span style="color: #f92672">;</span>
+<span style="color: #f92672">import</span> <span style="color: #f8f8f2">io.vertx.mutiny.core.Vertx</span><span style="color: #f92672">;</span>
+<span style="color: #f92672">import</span> <span style="color: #f8f8f2">io.vertx.mutiny.core.http.HttpServerResponse</span><span style="color: #f92672">;</span>
+<span style="color: #f92672">import</span> <span style="color: #f8f8f2">java.time.Duration</span><span style="color: #f92672">;</span>
+
+<span style="color: #66d9ef">public</span> <span style="color: #66d9ef">class</span> <span style="color: #a6e22e">TempRunner</span> <span style="color: #f92672">{</span>
+
+    <span style="color: #66d9ef">public</span> <span style="color: #66d9ef">static</span> <span style="color: #66d9ef">void</span> <span style="color: #a6e22e">main</span><span style="color: #f92672">(</span><span style="color: #f8f8f2">String</span><span style="color: #f92672">[]</span> <span style="color: #f8f8f2">args</span><span style="color: #f92672">)</span> <span style="color: #66d9ef">throws</span> <span style="color: #f8f8f2">Exception</span> <span style="color: #f92672">{</span>
+        <span style="color: #f8f8f2">var</span> <span style="color: #f8f8f2">vertx</span> <span style="color: #f92672">=</span> <span style="color: #f8f8f2">Vertx</span><span style="color: #f92672">.</span><span style="color: #a6e22e">vertx</span><span style="color: #f92672">();</span>
+        <span style="color: #f8f8f2">var</span> <span style="color: #f8f8f2">ops</span> <span style="color: #f92672">=</span> <span style="color: #66d9ef">new</span> <span style="color: #f8f8f2">HttpServerOptions</span><span style="color: #f92672">();</span>
+        <span style="color: #f8f8f2">var</span> <span style="color: #f8f8f2">h2</span> <span style="color: #f92672">=</span> <span style="color: #66d9ef">new</span> <span style="color: #f8f8f2">Http2Settings</span><span style="color: #f92672">();</span>
+        <span style="color: #f8f8f2">h2</span><span style="color: #f92672">.</span><span style="color: #a6e22e">setMaxConcurrentStreams</span><span style="color: #f92672">(</span><span style="color: #ae81ff">200</span><span style="color: #f8f8f2">_000</span><span style="color: #f92672">);</span>
+        <span style="color: #f8f8f2">ops</span><span style="color: #f92672">.</span><span style="color: #a6e22e">setInitialSettings</span><span style="color: #f92672">(</span><span style="color: #f8f8f2">h2</span><span style="color: #f92672">);</span>
+
+        <span style="color: #f8f8f2">var</span> <span style="color: #f8f8f2">server</span> <span style="color: #f92672">=</span> <span style="color: #f8f8f2">vertx</span><span style="color: #f92672">.</span><span style="color: #a6e22e">createHttpServer</span><span style="color: #f92672">(</span><span style="color: #f8f8f2">ops</span><span style="color: #f92672">);</span>
+        <span style="color: #f8f8f2">server</span><span style="color: #f92672">.</span><span style="color: #a6e22e">requestHandler</span><span style="color: #f92672">(</span><span style="color: #f8f8f2">request</span> <span style="color: #f92672">-&gt;</span> <span style="color: #f92672">{</span>
+            <span style="color: #f8f8f2">Thread</span><span style="color: #f92672">.</span><span style="color: #a6e22e">ofVirtual</span><span style="color: #f92672">().</span><span style="color: #a6e22e">start</span><span style="color: #f92672">(()</span> <span style="color: #f92672">-&gt;</span> <span style="color: #f92672">{</span>
+                <span style="color: #66d9ef">try</span> <span style="color: #f92672">{</span>
+                    <span style="color: #f8f8f2">Thread</span><span style="color: #f92672">.</span><span style="color: #a6e22e">sleep</span><span style="color: #f92672">(</span><span style="color: #f8f8f2">Duration</span><span style="color: #f92672">.</span><span style="color: #a6e22e">ofSeconds</span><span style="color: #f92672">(</span><span style="color: #ae81ff">10</span><span style="color: #f92672">));</span>
+                <span style="color: #f92672">}</span> <span style="color: #66d9ef">catch</span> <span style="color: #f92672">(</span><span style="color: #f8f8f2">Exception</span> <span style="color: #f8f8f2">ex</span><span style="color: #f92672">)</span> <span style="color: #f92672">{</span>
+                    <span style="color: #66d9ef">throw</span> <span style="color: #66d9ef">new</span> <span style="color: #a6e22e">RuntimeException</span><span style="color: #f92672">(</span><span style="color: #f8f8f2">ex</span><span style="color: #f92672">.</span><span style="color: #a6e22e">toString</span><span style="color: #f92672">());</span>
+                <span style="color: #f92672">}</span>
+                <span style="color: #f8f8f2">HttpServerResponse</span> <span style="color: #f8f8f2">response</span> <span style="color: #f92672">=</span> <span style="color: #f8f8f2">request</span><span style="color: #f92672">.</span><span style="color: #a6e22e">response</span><span style="color: #f92672">();</span>
+                <span style="color: #f8f8f2">response</span><span style="color: #f92672">.</span><span style="color: #a6e22e">endAndForget</span><span style="color: #f92672">(</span><span style="color: #e6db74">&quot;Hello World!&quot;</span><span style="color: #f92672">);</span>
+            <span style="color: #f92672">});</span>
+        <span style="color: #f92672">});</span>
+
+        <span style="color: #f8f8f2">server</span><span style="color: #f92672">.</span><span style="color: #a6e22e">listenAndAwait</span><span style="color: #f92672">(</span><span style="color: #ae81ff">8080</span><span style="color: #f92672">);</span>
+    <span style="color: #f92672">}</span>
+<span style="color: #f92672">}</span>
+</pre></div>
+
+<br/>
+<br/>
+<h4>25k Connections, 10s sleep - Vertx Web</h4>
+<!-- HTML generated using hilite.me --><div style="background: #ffffff; overflow:auto;width:auto;border:solid gray;border-width:.1em .1em .1em .8em;padding:.2em .6em;"><pre style="margin: 0; line-height: 125%"><span style="color: #996633">$ </span>wrk -t 25 -c 25000 -d 15s --timeout 15s http://127.0.0.1:8080/
+Running 15s <span style="color: #007020">test</span> @ http://127.0.0.1:8080/
+25 threads and 25000 connections
+Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    10.79s   192.11ms  11.02s    72.64%
+    Req/Sec     1.88k     1.80k    6.56k    57.14%
+25000 requests in 15.10s, 1.22MB <span style="color: #007020">read</span>
+Requests/sec:   1655.68
+Transfer/sec:     82.46KB
+</pre></div>
+<br/>
+<p>As you can see the benchmark ran fine, but whats unexpected is the memory usage.</p>
+<img src="/assets/images/jdk21-vt/vertx-25k-sleep.png" />
+<p>250MB to handle 25k HTTP connections. With -Xmx300m, the max RSS is down to 484MB. This is unreal. I had to increment a counter inside the handler to verify if it actually dispatches that many requests. Yes I counted 25k requests dispatching on the server. Comparing RSS value of Vert.x's <b>484MB</b> to Axum's <b>537MB</b>, I hereby declare Java uses less memory than Rust in this scenario :).</p>
+<p>
+
+</p>It is worth mentioning that there might be optimizations that can be done in Rust, or perhaps there are other Rust frameworks that can perform better than Vert.x. The primary goal here is not optimization or prove what is efficient, but rather to observe how the framework/language handles threads when the code is written without any intent for optimization or performance profiling. The Rust comparison is simply used as a reference to evaluate the effectiveness of Java's virtual threads :).</p>
